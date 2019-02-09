@@ -180,6 +180,8 @@ tap_interface::initialize_interface()
 	/* we must call bpfattach(). Otherwise we deadlock BPF while unloading. Seems to be a bug in
 	 * the kernel, see bpfdetach() in net/bpf.c, it will return without releasing the lock if
 	 * the interface wasn't attached. I wonder what they were smoking while writing it ;-)
+	 * This has been fixed in latest kernels, but we keep it for older kernels.
+	 * Furthermore the call is needed e.g. in order that 'ipconfig set tapN DHCP' works.
 	 */
 	bpfattach(ifp, DLT_EN10MB, ifnet_hdrlen(ifp));
 

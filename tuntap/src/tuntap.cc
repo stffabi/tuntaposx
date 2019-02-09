@@ -453,12 +453,27 @@ tuntap_interface::idle()
 void
 tuntap_interface::notify_bpf(mbuf_t mb, bool out)
 {
-	auto_lock l(&bpf_lock);
+	dprintf("tuntap: notify_bpf\n");
 
-	if ((out && bpf_mode == BPF_MODE_OUTPUT)
-			|| (!out && bpf_mode == BPF_MODE_INPUT)
-			|| (bpf_mode == BPF_MODE_INPUT_OUTPUT))
-		(*bpf_callback)(ifp, mb);
+	int (*l_bpf_callback)(ifnet_t, mbuf_t);
+	bpf_tap_mode l_bpf_mode;
+
+	/*
+	Do not hold the lock during the call of the callback. We never know what the kernel
+	does, e.g. it might call set_bpf_tap somehow during this callback which then results
+	in a deadlock.
+	*/
+	bpf_lock.lock();
+	l_bpf_callback = bpf_callback;
+	l_bpf_mode = bpf_mode;
+	bpf_lock.unlock();
+
+	if ((out && l_bpf_mode == BPF_MODE_OUTPUT)
+			|| (!out && l_bpf_mode == BPF_MODE_INPUT)
+			|| (l_bpf_mode == BPF_MODE_INPUT_OUTPUT))
+		(*l_bpf_callback)(ifp, mb);
+	
+	dprintf("tuntap: notify_bpf done\n");
 }
 
 void
@@ -929,13 +944,14 @@ tuntap_interface::if_ioctl(u_int32_t cmd, void *arg)
 errno_t
 tuntap_interface::if_set_bpf_tap(bpf_tap_mode mode, int (*cb)(ifnet_t, mbuf_t))
 {
-	dprintf("tuntap: mode %d\n", mode);
+	dprintf("tuntap: if_set_bpf_tap %d\n", mode);
 
 	auto_lock l(&bpf_lock);
 
 	bpf_callback = cb;
 	bpf_mode = mode;
 
+	dprintf("tuntap: if_set_bpf_tap %d done\n", mode);
 	return 0;
 }
 
